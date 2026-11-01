@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Composite post-merge: run git-lfs first (object fetch), then refresh
+# the FTS5 index if any markdown/ changed.
+
+set -eu
+
+# git-lfs object fetch (required since our hooks live under core.hooksPath).
+if command -v git-lfs >/dev/null 2>&1; then
+  git lfs post-merge "$@"
+fi
+
+# Index refresh — skip if venv not yet built (fresh clone before bootstrap).
+if [ ! -x ./.runtime/venv/bin/python ]; then
+  exit 0
+fi
+
+changed=$(git diff-tree -r --name-only --no-commit-id ORIG_HEAD HEAD 2>/dev/null \
+  | grep -c '^markdown/' || true)
+
+if [ "$changed" -gt 0 ]; then
+  echo "post-merge: $changed markdown change(s) — refreshing FTS5 index"
+  ./.runtime/venv/bin/python scripts/indexer.py
+fi

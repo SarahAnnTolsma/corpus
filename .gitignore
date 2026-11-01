@@ -1,0 +1,50 @@
+# Secrets — never commit. Use .env.example as a template.
+.env
+
+# Hidden runtime infrastructure: venv, caches, BHL dumps, transient logs.
+# Regenerable via scripts/bootstrap.sh + scripts/bhl_setup.py.
+.runtime/
+
+# FTS5 index — regenerable from markdown/ via scripts/indexer.py.
+index/
+
+# Embedded raster images ripped from PDFs — regenerable from pdfs/ via
+# scripts/extract_pdf_images.py.
+pdf_images/
+
+# BHL working caches: JP2 article images and pre-existing OCR text.
+# Regenerable from BHL S3 via scripts/bhl_fetch.py.
+bhl_images/
+bhl_ocr/
+
+# User-provided source images for stitching into pdfs/ via
+# scripts/stitch_source_images.py. One subdir per citation key.
+source_images/
+
+# Empty/cruft.
+images/
+
+# macOS + atomic-write artifacts.
+.DS_Store
+*.tmp
+manifest.json.tmp
+
+# Python.
+__pycache__/
+*.pyc
+
+# Claude Code session-local state (permission allowlist, scheduled-task locks).
+# Ignore everything under .claude/ except shared skills and plans (version-controlled).
+.claude/*
+!.claude/skills/
+!.claude/skills/**
+!.claude/plans/
+!.claude/plans/**
+
+# corpus.manifest write lock
+manifest.json.lock
+
+# This checkout's own record of what it holds: never part of the public
+# repository. (A private archive that tracks it is unaffected: ignore rules
+# do not apply to files already tracked.)
+manifest.json

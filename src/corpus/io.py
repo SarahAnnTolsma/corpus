@@ -1,0 +1,47 @@
+"""File writes that survive Ctrl-C: write a sibling .tmp, then rename over.
+
+The JSON format is the one the manifest has always had (indent 2, sorted
+keys, ASCII-escaped, no trailing newline), so switching a script to this
+helper never rewrites a file it did not change.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    path = Path(path)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
+
+
+def atomic_write_bytes(path: Path, data: bytes) -> None:
+    path = Path(path)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_bytes(data)
+    tmp.replace(path)
+
+
+def atomic_write_json(path: Path, data, *, indent: int | None = 2, sort_keys: bool = True,
+                      ensure_ascii: bool = True) -> None:
+    atomic_write_text(path, json.dumps(data, indent=indent, sort_keys=sort_keys,
+                                       ensure_ascii=ensure_ascii, default=str))
+
+
+def read_json(path: Path, default=None):
+    """Parsed JSON, or `default` if the file is missing or not valid JSON
+    (a cache entry truncated by an interrupted write counts as missing)."""
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, UnicodeDecodeError):
+        return default
+
+
+def jsonl_append(path: Path, record: dict) -> None:
+    """Append one JSON line (a log record), creating the folder if needed."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")

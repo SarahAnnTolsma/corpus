@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Refuse commits that include .env or look like leaked secrets.
+
+set -eu
+
+if git diff --cached --name-only | grep -qx '.env'; then
+  echo "pre-commit: refusing to commit .env (contains secrets)." >&2
+  echo "             Use .env.example as the tracked template." >&2
+  exit 1
+fi
+
+# Catch a non-empty value being introduced for a known secret key in any staged file.
+if git diff --cached -U0 \
+     | grep -E '^\+[^+].*\b(ANTHROPIC_API_KEY|BHL_API_KEY|UNPAYWALL_EMAIL)\b\s*=\s*\S' \
+     >/dev/null 2>&1; then
+  echo "pre-commit: a staged hunk looks like a secret value (API key / email)." >&2
+  echo "             Move it to .env (gitignored) and re-stage." >&2
+  exit 1
+fi
+
+# An Anthropic key in any form, and any api_key/token/secret field holding a
+# long literal (a key pasted into a note or a JSON file passes the check above).
+if git diff --cached -U0 \
+     | grep -E '^\+[^+]' \
+     | grep -Ei 'sk-ant-[a-z0-9]+-[A-Za-z0-9_-]{20,}|(api[_-]?key|secret|token)["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"'][A-Za-z0-9_./+=-]{20,}["'"'"']' \
+     >/dev/null 2>&1; then
+  echo "pre-commit: a staged hunk contains what looks like an API key or token." >&2
+  echo "             Move it to .env (gitignored) and re-stage." >&2
+  exit 1
+fi

@@ -1,0 +1,77 @@
+name: content-check
+
+# Required checks on main: no content from publications, and every commit
+# signed off (CONTRIBUTING.md). They also run on pushes to main so the checks
+# exist before a ruleset can require them.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  no-content:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: false
+      - name: Reject papers, PDFs, images and office files
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          # Files added or changed by this push or pull request; on a first
+          # push (no usable base) check every tracked file.
+          if [ -n "${BASE:-}" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            git diff --name-only --diff-filter=ACMR "$BASE" HEAD > changed.txt
+          else
+            git ls-files > changed.txt
+          fi
+          bad=$(grep -E -i \
+            -e '^(pdfs|markdown|supplementary|source_images|pdf_images|condensed|index|census)/' \
+            -e '\.(pdf|png|jpe?g|gif|tiff?|jp2|webp|heic|heif|bmp|doc|docx|xls|xlsx|epub|djvu)$' \
+            changed.txt | grep -v -E '(^|/)\.gitignore$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::This change adds files that may be content from publications."
+            echo "Papers, PDFs, page images and converted text never go in this repository"
+            echo "(CONTRIBUTING.md). Remove these files:"
+            echo "$bad" | sed 's/^/  /'
+            exit 1
+          fi
+          echo "ok: $(wc -l < changed.txt) file(s) checked"
+
+  signed-off:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: false
+      - name: Every commit carries Signed-off-by
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -n "${BASE:-}" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            range="$BASE..$HEAD"
+          else
+            range="$HEAD"          # first push: every commit
+          fi
+          missing=""
+          for c in $(git rev-list --no-merges "$range"); do
+            if ! git log -1 --format=%B "$c" | grep -q -E '^Signed-off-by: .+ <.+>$'; then
+              missing="$missing  $(git log -1 --format='%h %s' "$c")"$'\n'
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Commits without a Signed-off-by line (git commit -s; see CONTRIBUTING.md):"
+            printf '%s' "$missing"
+            exit 1
+          fi
+          echo "ok: every commit in $range is signed off"

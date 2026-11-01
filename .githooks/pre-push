@@ -1,0 +1,23 @@
+#!/bin/sh
+# $1 = remote name, $2 = remote URL.
+#
+# A private archive must never push to GitHub: its history holds the PDFs and
+# markdown. Marking the clone private (a local, untracked setting) arms the
+# guard; the public corpus repository leaves it unset and pushes normally.
+#
+#   git config archive.private true
+#
+# This backs up `git remote set-url --push upstream DISABLED`, which a new
+# remote or a mistyped remote name bypasses.
+if [ "$(git config --bool archive.private)" = "true" ]; then
+  case "$2" in
+    *github.com*)
+      printf >&2 '\npre-push: refusing to push this private archive to %s (%s).\n' "$1" "$2"
+      printf >&2 'Upstream contributions go through a separate clean clone of corpus.\n\n'
+      exit 1
+      ;;
+  esac
+fi
+
+command -v git-lfs >/dev/null 2>&1 || { printf >&2 "\n%s\n\n" "This repository is configured for Git LFS but 'git-lfs' was not found on your path. If you no longer wish to use Git LFS, remove this hook by deleting the 'pre-push' file in the hooks directory (set by 'core.hookspath'; usually '.git/hooks')."; exit 2; }
+git lfs pre-push "$@"
